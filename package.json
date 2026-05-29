@@ -1,0 +1,28 @@
+{
+  "name": "iris-solana",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Iris: verifiable on-chain receipts for AI agent actions",
+  "workspaces": [
+    "clients/ts"
+  ],
+  "scripts": {
+    "build": "anchor build",
+    "deploy:devnet": "anchor deploy --provider.cluster devnet",
+    "test": "anchor test",
+    "test:ts": "npm --workspace clients/ts run test",
+    "client:build": "npm --workspace clients/ts run build",
+    "lint": "npm --workspace clients/ts run lint"
+  },
+  "devDependencies": {
+    "@coral-xyz/anchor": "^0.30.1",
+    "@types/bn.js": "^5.1.5",
+    "@types/chai": "^4.3.16",
+    "@types/mocha": "^10.0.7",
+    "@types/node": "^22.5.0",
+    "chai": "^4.5.0",
+    "mocha": "^10.7.3",
+    "ts-mocha": "^10.0.0",
+    "typescript": "^5.5.4"
+  }
+}

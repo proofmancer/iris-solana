@@ -1,0 +1,18 @@
+.anchor/
+.DS_Store
+target/
+**/*.rs.bk
+node_modules/
+test-ledger/
+.idea/
+.vscode/
+**/dist/
+**/build/
+*.log
+
+# Keypairs — never commit
+*.json.key
+keys/
+.env
+.env.*
+!.env.example
