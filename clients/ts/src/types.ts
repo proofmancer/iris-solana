@@ -2,7 +2,7 @@ import { PublicKey } from "@solana/web3.js";
 import BN from "bn.js";
 
 export const IRIS_PROGRAM_ID = new PublicKey(
-  "Ir1sRecPt11111111111111111111111111111111",
+  "6Sd4wz6XWU8wKQZjttw6g5uQEJMaf5Juv9gTuC2uXWHm",
 );
 
 export const RECEIPT_SEED = Buffer.from("receipt");

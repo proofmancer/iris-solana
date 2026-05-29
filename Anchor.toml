@@ -6,12 +6,12 @@ resolution = true
 skip-lint = false
 
 [programs.localnet]
-iris_receipts = "Ir1sRecPt11111111111111111111111111111111"
-verifier_example = "Ver1f1erEx111111111111111111111111111111111"
+iris_receipts = "6Sd4wz6XWU8wKQZjttw6g5uQEJMaf5Juv9gTuC2uXWHm"
+verifier_example = "8XKK7KwjUMoLWbtZJDogDXem3PbhmZDcVmrV4sLLCBZm"
 
 [programs.devnet]
-iris_receipts = "Ir1sRecPt11111111111111111111111111111111"
-verifier_example = "Ver1f1erEx111111111111111111111111111111111"
+iris_receipts = "6Sd4wz6XWU8wKQZjttw6g5uQEJMaf5Juv9gTuC2uXWHm"
+verifier_example = "8XKK7KwjUMoLWbtZJDogDXem3PbhmZDcVmrV4sLLCBZm"
 
 [registry]
 url = "https://api.apr.dev"

@@ -23,6 +23,11 @@ export interface DaPointer {
 export class CelestiaPublisher {
   constructor(private readonly cfg: CelestiaConfig) {}
 
+  /** The Iris namespace this publisher targets. */
+  get namespace(): Uint8Array {
+    return this.cfg.namespace;
+  }
+
   /** Submit a blob and return the inclusion height + commitment. */
   async submitBlob(blob: Uint8Array): Promise<{ height: bigint; commitment: Uint8Array }> {
     const body = {
@@ -176,7 +181,7 @@ export class DaWorker {
     const { height, commitment } = await this.cfg.publisher.submitBlob(batch.blob);
     const pointer = encodeDaPointer({
       height,
-      namespace: (this.cfg.publisher as any).cfg?.namespace ?? new Uint8Array(24),
+      namespace: this.cfg.publisher.namespace,
       commitment,
     });
     await this.cfg.onRootReady(batch.root, pointer, batch.count);
