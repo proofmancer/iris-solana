@@ -16,11 +16,21 @@ export interface DaPointer {
 }
 
 /**
+ * A data-availability publisher. `submitBlob` writes the batch blob to some DA
+ * layer and returns the 64-byte on-chain `da_pointer` that locates it.
+ * Implemented by SolanaDaPublisher (default, Solana ledger) and
+ * CelestiaPublisher (optional Phase-2 scale path).
+ */
+export interface BlobPublisher {
+  submitBlob(blob: Uint8Array): Promise<{ daPointer: Uint8Array }>;
+}
+
+/**
  * Minimal celestia-node JSON-RPC client. We deliberately keep this
  * dependency-free so the relayer can swap it for the official client
  * (https://www.npmjs.com/package/@celestiaorg/celestia-node-client) later.
  */
-export class CelestiaPublisher {
+export class CelestiaPublisher implements BlobPublisher {
   constructor(private readonly cfg: CelestiaConfig) {}
 
   /** The Iris namespace this publisher targets. */
@@ -29,7 +39,9 @@ export class CelestiaPublisher {
   }
 
   /** Submit a blob and return the inclusion height + commitment. */
-  async submitBlob(blob: Uint8Array): Promise<{ height: bigint; commitment: Uint8Array }> {
+  async submitBlob(
+    blob: Uint8Array,
+  ): Promise<{ daPointer: Uint8Array; height: bigint; commitment: Uint8Array }> {
     const body = {
       id: 1,
       jsonrpc: "2.0",
@@ -60,7 +72,8 @@ export class CelestiaPublisher {
     if (json.error) throw new Error(`celestia: ${json.error.message}`);
     const height = BigInt(json.result ?? 0);
     const commitment = blobCommitment(blob);
-    return { height, commitment };
+    const daPointer = encodeDaPointer({ height, namespace: this.cfg.namespace, commitment });
+    return { daPointer, height, commitment };
   }
 }
 
@@ -140,7 +153,7 @@ function blobCommitment(blob: Uint8Array): Uint8Array {
 }
 
 export interface DaWorkerConfig {
-  publisher: CelestiaPublisher;
+  publisher: BlobPublisher;
   /** Flush when buffer hits this many receipts. */
   batchSize: number;
   /** Or after this many ms. */
@@ -178,12 +191,7 @@ export class DaWorker {
     const drained = this.buffer;
     this.buffer = [];
     const batch = buildBatch(drained);
-    const { height, commitment } = await this.cfg.publisher.submitBlob(batch.blob);
-    const pointer = encodeDaPointer({
-      height,
-      namespace: this.cfg.publisher.namespace,
-      commitment,
-    });
-    await this.cfg.onRootReady(batch.root, pointer, batch.count);
+    const { daPointer } = await this.cfg.publisher.submitBlob(batch.blob);
+    await this.cfg.onRootReady(batch.root, daPointer, batch.count);
   }
 }
