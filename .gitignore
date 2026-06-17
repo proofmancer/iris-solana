@@ -16,3 +16,9 @@ keys/
 .env
 .env.*
 !.env.example
+
+# Agent / superstack tooling context (local-only).
+.agents/
+.superstack/
+skills-lock.json
+*-help.txt
