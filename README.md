@@ -172,13 +172,8 @@ const { signature, receiptPda, payloadHash } = await iris.issueReceipt({
 return { signature, receiptPda: receiptPda.toBase58(), payloadHash: payloadHash.toString("hex") };
 ```
 
-## Notes & known TODOs
+## Notes
 
-- The `issue_receipt` discriminator in `clients/ts/src/relayer.ts` is precomputed (`b96c73821e83afb6`). If you rename the
-  instruction in Rust, regenerate it: `sha256("global:issue_receipt")[..8]`.
-- `DaWorker.flush()` currently reads `(this.cfg.publisher as any).cfg.namespace` — replace with a typed accessor before
-  shipping.
-- `verify_receipt` is a `.view()` ix today; switching it to a real CPI just means dropping the `.view()` call in clients and
-  reading `ReceiptVerified` from logs.
-- Program IDs in `Anchor.toml` / `declare_id!` are placeholders. Generate real keys with `anchor keys list` after `anchor build`
-  and update both files.
+- The `issue_receipt` discriminator in `clients/ts/src/relayer.ts` is precomputed (`b96c73821e83afb6`); regenerate with `sha256("global:issue_receipt")[..8]` if the instruction is renamed.
+- Two verification patterns ship: pure client-side (`clients/ts/src/verify.ts` derives the PDA, reads the account, decodes the bytes) and on-chain CPI (`verify_receipt` ix returns `AttestationView` and emits `ReceiptVerified`). Pick whichever fits your caller.
+- `BlobPublisher` is pluggable. The Solana-native ledger publisher is the default; the Celestia mocha-4 publisher (`clients/ts/src/da/celestia.ts`) is optional and exposes the namespace via a typed `get namespace()` accessor.
