@@ -8,7 +8,7 @@ pub use state::*;
 pub use error::*;
 use instructions::*;
 
-declare_id!("6Sd4wz6XWU8wKQZjttw6g5uQEJMaf5Juv9gTuC2uXWHm");
+declare_id!("GvXMdAupDkGQxNXVEPMNowxFbyuBS5Bi4Kfq1zcDdopK");
 
 #[program]
 pub mod iris_receipts {

@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Iris (verify an on-chain receipt)</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='6' fill='%23A7D28C'/%3E%3C/svg%3E">
+<style>
+  :root {
+    --bg: #0A0B0E;
+    --ink: #f4f2ec;
+    --muted: #8a8a8a;
+    --accent: #A7D28C;
+    --accent-dim: #6f9460;
+    --border: #1d1f24;
+    --err: #d96d6d;
+    --ok: #A7D28C;
+    --warn: #d9a76d;
+    --mono: ui-monospace, "JetBrains Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+    --sans: ui-sans-serif, "Space Grotesk", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { background: var(--bg); color: var(--ink); margin: 0; padding: 0; font-family: var(--sans); -webkit-font-smoothing: antialiased; }
+  body { min-height: 100vh; display: flex; flex-direction: column; }
+  header, footer { padding: 1.5rem 1.5rem; }
+  header { display: flex; align-items: center; gap: .75rem; border-bottom: 1px solid var(--border); }
+  header .dot { width: .6rem; height: .6rem; border-radius: 50%; background: var(--accent); display: inline-block; }
+  header .name { font-family: var(--mono); font-size: .85rem; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+  main { flex: 1; max-width: 720px; width: 100%; margin: 0 auto; padding: 3rem 1.5rem; }
+  h1 { font-size: 2.25rem; font-weight: 600; letter-spacing: -.02em; margin: 0 0 .75rem; }
+  .lead { color: var(--muted); margin: 0 0 2.5rem; max-width: 60ch; line-height: 1.55; }
+  .lead a { color: var(--ink); text-decoration: underline; text-decoration-color: var(--accent); text-underline-offset: .25em; }
+  form { display: grid; gap: .75rem; }
+  label { font-family: var(--mono); font-size: .75rem; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+  input[type="text"] { width: 100%; padding: .85rem 1rem; background: transparent; color: var(--ink); border: 1px solid var(--border); border-radius: 4px; font-family: var(--mono); font-size: .9rem; }
+  input[type="text"]:focus { outline: none; border-color: var(--accent); }
+  .row { display: flex; gap: .75rem; flex-wrap: wrap; }
+  button { padding: .85rem 1.4rem; background: var(--accent); color: #0A0B0E; border: 0; border-radius: 4px; font-family: var(--sans); font-weight: 600; font-size: .95rem; cursor: pointer; }
+  button:hover { background: var(--accent-dim); }
+  button.ghost { background: transparent; color: var(--muted); border: 1px solid var(--border); }
+  button.ghost:hover { background: transparent; color: var(--ink); border-color: var(--ink); }
+  #result { margin-top: 2.5rem; padding: 1.5rem; border: 1px solid var(--border); border-radius: 4px; background: rgba(167, 210, 140, .03); }
+  #result.error { border-color: var(--err); background: rgba(217, 109, 109, .05); }
+  #result.pending { border-color: var(--warn); background: rgba(217, 167, 109, .05); }
+  .status { display: flex; align-items: center; gap: .5rem; font-family: var(--mono); font-size: .8rem; letter-spacing: .12em; text-transform: uppercase; margin-bottom: 1rem; }
+  .status .pill { padding: .25rem .6rem; border-radius: 99px; background: var(--accent); color: #0A0B0E; font-weight: 700; }
+  #result.error .pill { background: var(--err); color: var(--ink); }
+  #result.pending .pill { background: var(--warn); color: #0A0B0E; }
+  dl { display: grid; grid-template-columns: max-content 1fr; gap: .6rem 1.25rem; margin: 0; font-family: var(--mono); font-size: .85rem; }
+  dt { color: var(--muted); }
+  dd { margin: 0; word-break: break-all; }
+  dd a { color: var(--accent); text-decoration: none; }
+  dd a:hover { text-decoration: underline; }
+  footer { border-top: 1px solid var(--border); color: var(--muted); font-family: var(--mono); font-size: .75rem; letter-spacing: .08em; display: flex; flex-wrap: wrap; gap: 1.25rem; justify-content: space-between; }
+  footer a { color: var(--muted); text-decoration: none; }
+  footer a:hover { color: var(--ink); }
+  .examples { margin-top: 1rem; font-family: var(--mono); font-size: .75rem; color: var(--muted); }
+  .examples button { background: transparent; color: var(--accent); border: 0; padding: 0; cursor: pointer; font-family: var(--mono); font-size: .75rem; text-decoration: underline; }
+  .hero { padding: 4rem 0 3rem; border-bottom: 1px solid var(--border); }
+  .hero .eyebrow { font-family: var(--mono); font-size: .75rem; letter-spacing: .14em; text-transform: uppercase; color: var(--accent); margin-bottom: 1rem; }
+  .hero h1 { font-size: 2.75rem; letter-spacing: -.03em; line-height: 1.05; margin: 0 0 1rem; }
+  .hero h1 .accent { color: var(--accent); }
+  .hero .lead { font-size: 1.05rem; line-height: 1.5; max-width: 56ch; }
+  .section { padding: 3rem 0; border-bottom: 1px solid var(--border); }
+  .section .eyebrow { font-family: var(--mono); font-size: .7rem; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); margin-bottom: 1.25rem; }
+  .section h2 { font-size: 1.5rem; letter-spacing: -.015em; margin: 0 0 1.25rem; }
+  .steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1.5rem; margin-top: 1.5rem; }
+  .step { padding: 1.25rem; border: 1px solid var(--border); border-radius: 4px; }
+  .step .num { font-family: var(--mono); font-size: .75rem; color: var(--accent); letter-spacing: .14em; margin-bottom: .5rem; }
+  .step h3 { font-size: .95rem; margin: 0 0 .5rem; }
+  .step p { color: var(--muted); font-size: .85rem; line-height: 1.5; margin: 0; }
+  pre { background: rgba(167, 210, 140, .04); border: 1px solid var(--border); border-radius: 4px; padding: 1rem 1.25rem; overflow-x: auto; font-family: var(--mono); font-size: .8rem; line-height: 1.55; color: var(--ink); }
+  code { font-family: var(--mono); color: var(--accent); }
+  pre code { color: inherit; }
+</style>
+</head>
+<body>
+<header>
+  <span class="dot"></span>
+  <span class="name">iris &middot; verify</span>
+</header>
+
+<main>
+  <section class="hero">
+    <div class="eyebrow">Solana devnet &middot; open source</div>
+    <h1>Iris. <span class="accent">Verifiable provenance</span><br>for AI agents on Solana.</h1>
+    <p class="lead">
+      Every time an AI agent takes an action through MCP, Iris writes a signed on-chain receipt
+      to a content-addressable PDA. Any Solana program can derive the PDA from the payload hash
+      and verify the action atomically. No indexer required.
+    </p>
+  </section>
+
+  <section class="section">
+    <div class="eyebrow">How it works</div>
+    <h2>Three primitives, one receipt.</h2>
+    <div class="steps">
+      <div class="step">
+        <div class="num">01</div>
+        <h3>Agent acts via MCP</h3>
+        <p>The Iris MCP server intercepts the tool call, hashes the canonical payload, and asks the relayer to sign.</p>
+      </div>
+      <div class="step">
+        <div class="num">02</div>
+        <h3>Relayer issues receipt</h3>
+        <p>The relayer calls <code>issue_receipt</code>. The chain stores <code>(action, authorizing_key, payload_hash, timestamp)</code> at PDA <code>[b"receipt", payload_hash]</code>.</p>
+      </div>
+      <div class="step">
+        <div class="num">03</div>
+        <h3>Anyone verifies</h3>
+        <p>Downstream programs derive the same PDA and read the account. No CPI required for the cheap path; an on-chain <code>verify_receipt</code> ix exists for CPI use too.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="eyebrow">Try it</div>
+    <h2>Verify an Iris receipt.</h2>
+    <p class="lead" style="margin-bottom: 1.5rem">
+      Paste a 32-byte payload hash. The page derives the PDA client-side and reads the receipt
+      directly from Solana devnet.
+    </p>
+
+    <form id="verify-form" autocomplete="off">
+      <label for="payload-hash">Payload hash (32 bytes, hex)</label>
+      <input id="payload-hash" name="hash" type="text" placeholder="a1b2c3... (64 hex chars, optional 0x prefix)" spellcheck="false" required>
+      <div class="row">
+        <button type="submit">Verify</button>
+        <button type="button" class="ghost" id="clear">Clear</button>
+      </div>
+      <div class="examples">
+        <button type="button" id="demo-btn">Try the demo receipt</button>
+      </div>
+    </form>
+
+    <section id="result" hidden></section>
+  </section>
+
+  <section class="section">
+    <div class="eyebrow">Integrate</div>
+    <h2>Drop it into your Solana program.</h2>
+    <p class="lead" style="margin-bottom: 1.5rem">
+      Receipts are content-addressable. Any downstream program can verify by deriving the same PDA.
+    </p>
+    <pre><code>// Cheap verification path: derive the PDA, read the account, check fields.
+use anchor_lang::prelude::*;
+use iris_receipts::state::{Receipt, RECEIPT_SEED};
+
+#[derive(Accounts)]
+#[instruction(payload_hash: [u8; 32])]
+pub struct ExecuteWithReceipt&lt;'info&gt; {
+    #[account(
+        seeds = [RECEIPT_SEED, payload_hash.as_ref()],
+        seeds::program = iris_receipts::ID,
+        bump,
+    )]
+    pub receipt: Account&lt;'info, Receipt&gt;,
+}
+
+pub fn handler(ctx: Context&lt;ExecuteWithReceipt&gt;, payload_hash: [u8; 32]) -&gt; Result&lt;()&gt; {
+    let r = &amp;ctx.accounts.receipt;
+    require!(r.payload_hash == payload_hash, ErrorCode::Mismatch);
+    // r.action, r.authorizing_key, r.timestamp are all on-chain truth.
+    Ok(())
+}</code></pre>
+    <p style="margin-top: 1rem; color: var(--muted); font-size: .85rem">
+      Full source, TypeScript client, and downstream verifier example at
+      <a href="https://github.com/proofmancer/iris-solana" style="color: var(--accent)">github.com/proofmancer/iris-solana</a>.
+    </p>
+  </section>
+</main>
+
+<footer>
+  <span>Solana devnet &middot; <span id="program-id-footer"></span></span>
+  <span><a href="https://github.com/proofmancer/iris-solana">github.com/proofmancer/iris-solana</a></span>
+</footer>
+
+<script type="module">
+  import { Connection, PublicKey } from "https://esm.sh/@solana/web3.js@1.95.3";
+
+  // Devnet program id of `iris-receipts`. Updated after `anchor deploy --provider.cluster devnet`.
+  const PROGRAM_ID = new PublicKey("GvXMdAupDkGQxNXVEPMNowxFbyuBS5Bi4Kfq1zcDdopK");
+  const RPC = "https://api.devnet.solana.com";
+  const RECEIPT_VERSION = 1;
+  const DISCRIMINATOR_LEN = 8;
+  const conn = new Connection(RPC, "confirmed");
+
+  document.getElementById("program-id-footer").textContent = shortId(PROGRAM_ID.toBase58());
+
+  function shortId(s) { return s.length > 12 ? s.slice(0, 6) + "..." + s.slice(-6) : s; }
+
+  function hexToBytes(hex) {
+    const clean = hex.trim().replace(/^0x/, "");
+    if (!/^[0-9a-fA-F]{64}$/.test(clean)) throw new Error("Payload hash must be 32 bytes (64 hex chars).");
+    const out = new Uint8Array(32);
+    for (let i = 0; i < 32; i++) out[i] = parseInt(clean.slice(i * 2, i * 2 + 2), 16);
+    return out;
+  }
+
+  function bytesToHex(bytes) { return Array.from(bytes).map(b => b.toString(16).padStart(2, "0")).join(""); }
+
+  async function deriveReceiptPda(payloadHash) {
+    const [pda] = await PublicKey.findProgramAddress([new TextEncoder().encode("receipt"), payloadHash], PROGRAM_ID);
+    return pda;
+  }
+
+  function decodeReceipt(raw) {
+    if (raw.length < DISCRIMINATOR_LEN + 1 + 32 + 32 + 32 + 32 + 8 + 8 + 1 + 1) throw new Error("Receipt account is too short.");
+    let o = DISCRIMINATOR_LEN;
+    const version = raw[o]; o += 1;
+    const action = raw.slice(o, o + 32); o += 32;
+    const authorizingKey = new PublicKey(raw.slice(o, o + 32)); o += 32;
+    const relayer = new PublicKey(raw.slice(o, o + 32)); o += 32;
+    const payloadHash = raw.slice(o, o + 32); o += 32;
+    const view = new DataView(raw.buffer, raw.byteOffset + o, 16);
+    const timestamp = Number(view.getBigInt64(0, true));
+    const slot = Number(view.getBigUint64(8, true));
+    o += 16;
+    const hasRoot = raw[o]; o += 1;
+    let rootCommit = null;
+    if (hasRoot === 1) { rootCommit = new PublicKey(raw.slice(o, o + 32)); o += 32; }
+    const bump = raw[o];
+    return { version, action, authorizingKey, relayer, payloadHash, timestamp, slot, rootCommit, bump };
+  }
+
+  function renderResult({ pda, receipt, payloadHashHex }) {
+    const el = document.getElementById("result");
+    el.className = receipt.rootCommit ? "" : "pending";
+    el.hidden = false;
+    const explorer = (key) => `https://explorer.solana.com/address/${key}?cluster=devnet`;
+    const isoTime = new Date(receipt.timestamp * 1000).toISOString();
+    const status = receipt.rootCommit ? "Verified" : "Verified (not yet anchored)";
+    el.innerHTML = `
+      <div class="status"><span class="pill">${status}</span><span>receipt found on devnet</span></div>
+      <dl>
+        <dt>PDA</dt><dd><a href="${explorer(pda.toBase58())}" target="_blank" rel="noopener">${pda.toBase58()}</a></dd>
+        <dt>Version</dt><dd>${receipt.version}</dd>
+        <dt>Action hash</dt><dd>${bytesToHex(receipt.action)}</dd>
+        <dt>Authorizing key</dt><dd><a href="${explorer(receipt.authorizingKey.toBase58())}" target="_blank" rel="noopener">${receipt.authorizingKey.toBase58()}</a></dd>
+        <dt>Relayer</dt><dd><a href="${explorer(receipt.relayer.toBase58())}" target="_blank" rel="noopener">${receipt.relayer.toBase58()}</a></dd>
+        <dt>Payload hash</dt><dd>${payloadHashHex}</dd>
+        <dt>Timestamp</dt><dd>${isoTime} (slot ${receipt.slot})</dd>
+        <dt>Root commit</dt><dd>${receipt.rootCommit ? `<a href="${explorer(receipt.rootCommit.toBase58())}" target="_blank" rel="noopener">${receipt.rootCommit.toBase58()}</a>` : "<em>not yet anchored to a DA root</em>"}</dd>
+      </dl>
+    `;
+  }
+
+  function renderError(message) {
+    const el = document.getElementById("result");
+    el.className = "error";
+    el.hidden = false;
+    el.innerHTML = `<div class="status"><span class="pill">Error</span><span>${message}</span></div>`;
+  }
+
+  document.getElementById("verify-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const input = document.getElementById("payload-hash").value;
+    try {
+      const bytes = hexToBytes(input);
+      const pda = await deriveReceiptPda(bytes);
+      const info = await conn.getAccountInfo(pda, "confirmed");
+      if (!info) { renderError(`No receipt at ${pda.toBase58()}`); return; }
+      if (!info.owner.equals(PROGRAM_ID)) { renderError(`Account is owned by ${info.owner.toBase58()}, not the Iris program.`); return; }
+      const receipt = decodeReceipt(info.data);
+      if (receipt.version !== RECEIPT_VERSION) { renderError(`Unsupported receipt version ${receipt.version}.`); return; }
+      const expectedHex = bytesToHex(bytes);
+      const onChainHex = bytesToHex(receipt.payloadHash);
+      if (expectedHex !== onChainHex) { renderError(`On-chain payload hash does not match (${onChainHex}).`); return; }
+      renderResult({ pda, receipt, payloadHashHex: expectedHex });
+    } catch (err) {
+      renderError(err.message || String(err));
+    }
+  });
+
+  document.getElementById("clear").addEventListener("click", () => {
+    document.getElementById("payload-hash").value = "";
+    document.getElementById("result").hidden = true;
+  });
+
+  // Demo receipt: sha256("iris demo v1"). Issued on-chain at deploy time.
+  const DEMO_HASH = "1d2ab801ae44abb58fa5b468ae9322fd37bb3947fc3169208c119c75f7626ed6";
+  document.getElementById("demo-btn").addEventListener("click", () => {
+    document.getElementById("payload-hash").value = DEMO_HASH;
+    document.getElementById("verify-form").dispatchEvent(new Event("submit", { cancelable: true }));
+  });
+</script>
+</body>
+</html>

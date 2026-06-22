@@ -22,3 +22,6 @@ keys/
 .superstack/
 skills-lock.json
 *-help.txt
+
+# Local lockfile reflects a non-working local toolchain attempt; regen with  against a known-good Solana setup.
+Cargo.lock

@@ -2,7 +2,7 @@ use anchor_lang::prelude::*;
 
 use iris_receipts::state::{Receipt, RECEIPT_SEED};
 
-declare_id!("8XKK7KwjUMoLWbtZJDogDXem3PbhmZDcVmrV4sLLCBZm");
+declare_id!("GpMLBm464nn3TH4Ph5yQAZHfXWcZy6qwKPeKpLQWtGZS");
 
 #[program]
 pub mod verifier_example {
