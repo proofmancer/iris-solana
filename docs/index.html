@@ -72,6 +72,30 @@
   pre { background: rgba(167, 210, 140, .04); border: 1px solid var(--border); border-radius: 4px; padding: 1rem 1.25rem; overflow-x: auto; font-family: var(--mono); font-size: .8rem; line-height: 1.55; color: var(--ink); }
   code { font-family: var(--mono); color: var(--accent); }
   pre code { color: inherit; }
+  textarea { width: 100%; padding: .85rem 1rem; background: transparent; color: var(--ink); border: 1px solid var(--border); border-radius: 4px; font-family: var(--mono); font-size: .9rem; resize: vertical; min-height: 110px; }
+  textarea:focus { outline: none; border-color: var(--accent); }
+  .wallet-bar { display: flex; align-items: center; gap: .75rem; padding: .75rem 1rem; border: 1px solid var(--border); border-radius: 4px; margin-bottom: 1.5rem; flex-wrap: wrap; }
+  .wallet-bar .status-dot { width: .55rem; height: .55rem; border-radius: 50%; background: var(--err); display: inline-block; }
+  .wallet-bar.connected .status-dot { background: var(--accent); }
+  .wallet-bar .who { font-family: var(--mono); font-size: .85rem; color: var(--muted); flex: 1; min-width: 200px; }
+  .wallet-bar.connected .who { color: var(--ink); }
+  .wallet-bar button { padding: .55rem 1rem; font-size: .85rem; }
+  .field { display: grid; gap: .4rem; margin-bottom: 1rem; }
+  .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+  @media (max-width: 600px) { .field-row { grid-template-columns: 1fr; } }
+  select { padding: .85rem 1rem; background: transparent; color: var(--ink); border: 1px solid var(--border); border-radius: 4px; font-family: var(--mono); font-size: .9rem; appearance: none; cursor: pointer; }
+  select:focus { outline: none; border-color: var(--accent); }
+  .key-note { font-family: var(--mono); font-size: .7rem; color: var(--muted); margin-top: .25rem; }
+  .key-note a { color: var(--accent); text-decoration: none; }
+  .response-box { padding: 1rem 1.25rem; border: 1px solid var(--border); border-radius: 4px; background: rgba(167, 210, 140, .03); font-family: var(--mono); font-size: .85rem; line-height: 1.55; white-space: pre-wrap; word-break: break-word; max-height: 320px; overflow-y: auto; }
+  .response-box.empty { color: var(--muted); }
+  .toolrow { display: flex; gap: .75rem; flex-wrap: wrap; margin-top: 1rem; }
+  .receipt-out { margin-top: 1.5rem; padding: 1.25rem; border: 1px solid var(--accent-dim); border-radius: 4px; background: rgba(167, 210, 140, .05); display: none; }
+  .receipt-out.shown { display: block; }
+  .receipt-out h4 { margin: 0 0 .75rem; font-size: .85rem; font-family: var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--accent); }
+  .receipt-out dl { grid-template-columns: max-content 1fr; }
+  .keys-clear { background: transparent; color: var(--muted); border: 0; padding: 0; font-family: var(--mono); font-size: .7rem; cursor: pointer; text-decoration: underline; }
+  .keys-clear:hover { color: var(--err); }
 </style>
 </head>
 <body>
@@ -114,8 +138,63 @@
   </section>
 
   <section class="section">
-    <div class="eyebrow">Try it</div>
-    <h2>Verify an Iris receipt.</h2>
+    <div class="eyebrow">Try it for real</div>
+    <h2>Prompt an LLM, then sign the receipt.</h2>
+    <p class="lead" style="margin-bottom: 1.5rem">
+      Connect a devnet wallet, run a prompt through Claude, OpenAI, or Gemini (bring your own key, stored only in your browser),
+      then issue an on-chain Iris receipt for the exchange. No backend, no key leaves your machine.
+    </p>
+
+    <div id="wallet-bar" class="wallet-bar">
+      <span class="status-dot"></span>
+      <span class="who" id="wallet-who">No wallet connected</span>
+      <button type="button" id="connect-btn">Connect Phantom (devnet)</button>
+      <button type="button" id="disconnect-btn" class="ghost" style="display:none">Disconnect</button>
+    </div>
+
+    <div class="field-row">
+      <div class="field">
+        <label for="model-pick">Model</label>
+        <select id="model-pick">
+          <option value="demo">Demo response (no key needed)</option>
+          <option value="claude">Claude (Anthropic API key)</option>
+          <option value="openai">OpenAI (API key)</option>
+          <option value="gemini">Gemini (Google AI key)</option>
+        </select>
+      </div>
+      <div class="field" id="key-field" style="display:none">
+        <label for="api-key">API key</label>
+        <input type="password" id="api-key" placeholder="paste key, stored in localStorage only" spellcheck="false" autocomplete="off">
+        <div class="key-note">
+          Stored in your browser only. <button type="button" class="keys-clear" id="forget-keys">Forget all keys</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="field">
+      <label for="prompt">Prompt</label>
+      <textarea id="prompt" placeholder="Ask the model anything. The exchange (prompt + response + model + timestamp) becomes the receipt payload."></textarea>
+    </div>
+
+    <div class="toolrow">
+      <button type="button" id="generate-btn">Generate response</button>
+      <button type="button" id="issue-btn" class="ghost" disabled>Issue Iris receipt</button>
+    </div>
+
+    <div class="field" style="margin-top: 1.5rem">
+      <label>LLM response</label>
+      <div id="llm-response" class="response-box empty">Run a prompt to see the response. Then sign the receipt.</div>
+    </div>
+
+    <div id="receipt-out" class="receipt-out">
+      <h4>Receipt issued</h4>
+      <dl id="receipt-out-list"></dl>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="eyebrow">Or, verify by hash</div>
+    <h2>Verify an existing Iris receipt.</h2>
     <p class="lead" style="margin-bottom: 1.5rem">
       Paste a 32-byte payload hash. The page derives the PDA client-side and reads the receipt
       directly from Solana devnet.
@@ -176,7 +255,7 @@ pub fn handler(ctx: Context&lt;ExecuteWithReceipt&gt;, payload_hash: [u8; 32]) -
 </footer>
 
 <script type="module">
-  import { Connection, PublicKey } from "https://esm.sh/@solana/web3.js@1.95.3";
+  import { Connection, PublicKey, Transaction, TransactionInstruction, SystemProgram } from "https://esm.sh/@solana/web3.js@1.95.3";
 
   // Devnet program id of `iris-receipts`. Updated after `anchor deploy --provider.cluster devnet`.
   const PROGRAM_ID = new PublicKey("GvXMdAupDkGQxNXVEPMNowxFbyuBS5Bi4Kfq1zcDdopK");
@@ -222,6 +301,247 @@ pub fn handler(ctx: Context&lt;ExecuteWithReceipt&gt;, payload_hash: [u8; 32]) -
     const bump = raw[o];
     return { version, action, authorizingKey, relayer, payloadHash, timestamp, slot, rootCommit, bump };
   }
+
+  // SHA-256 via browser SubtleCrypto.
+  async function sha256(input) {
+    const data = typeof input === "string" ? new TextEncoder().encode(input) : input;
+    return new Uint8Array(await crypto.subtle.digest("SHA-256", data));
+  }
+
+  // ----- Wallet (Phantom) -----
+  const walletState = { publicKey: null };
+  const walletBar = document.getElementById("wallet-bar");
+  const walletWho = document.getElementById("wallet-who");
+  const connectBtn = document.getElementById("connect-btn");
+  const disconnectBtn = document.getElementById("disconnect-btn");
+  const issueBtn = document.getElementById("issue-btn");
+
+  function refreshWalletUI() {
+    if (walletState.publicKey) {
+      walletBar.classList.add("connected");
+      walletWho.textContent = walletState.publicKey.toBase58();
+      connectBtn.style.display = "none";
+      disconnectBtn.style.display = "";
+    } else {
+      walletBar.classList.remove("connected");
+      walletWho.textContent = "No wallet connected";
+      connectBtn.style.display = "";
+      disconnectBtn.style.display = "none";
+    }
+  }
+
+  async function connectWallet() {
+    if (!window.solana || !window.solana.isPhantom) {
+      alert("Phantom wallet not detected. Install at https://phantom.app and set it to Devnet.");
+      return;
+    }
+    try {
+      const resp = await window.solana.connect();
+      walletState.publicKey = new PublicKey(resp.publicKey.toString());
+      refreshWalletUI();
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
+  function disconnectWallet() {
+    if (window.solana && window.solana.disconnect) window.solana.disconnect();
+    walletState.publicKey = null;
+    refreshWalletUI();
+  }
+
+  connectBtn.addEventListener("click", connectWallet);
+  disconnectBtn.addEventListener("click", disconnectWallet);
+  refreshWalletUI();
+
+  // ----- LLM picker + API key -----
+  const modelPick = document.getElementById("model-pick");
+  const keyField = document.getElementById("key-field");
+  const apiKey = document.getElementById("api-key");
+
+  function syncKeyField() {
+    const m = modelPick.value;
+    if (m === "demo") {
+      keyField.style.display = "none";
+      apiKey.value = "";
+    } else {
+      keyField.style.display = "";
+      apiKey.value = localStorage.getItem(`iris.key.${m}`) || "";
+    }
+  }
+  modelPick.addEventListener("change", syncKeyField);
+  apiKey.addEventListener("input", () => {
+    const m = modelPick.value;
+    if (m !== "demo") localStorage.setItem(`iris.key.${m}`, apiKey.value);
+  });
+  syncKeyField();
+  document.getElementById("forget-keys").addEventListener("click", () => {
+    ["claude", "openai", "gemini"].forEach(k => localStorage.removeItem(`iris.key.${k}`));
+    apiKey.value = "";
+    alert("Cleared all stored API keys.");
+  });
+
+  // ----- LLM calls -----
+  const DEMO_RESPONSE = "Iris stores a signed, content-addressable receipt for every action an AI agent takes through MCP. The receipt PDA is derived from sha256 of the canonical payload, so any downstream Solana program can verify the action by re-deriving the same address. No indexer required, no oracle, no third party.";
+
+  async function callClaude(prompt, key) {
+    const r = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-api-key": key,
+        "anthropic-version": "2023-06-01",
+        "anthropic-dangerous-direct-browser-access": "true",
+      },
+      body: JSON.stringify({
+        model: "claude-haiku-4-5-20251001",
+        max_tokens: 512,
+        messages: [{ role: "user", content: prompt }],
+      }),
+    });
+    if (!r.ok) throw new Error(`Claude API ${r.status}: ${await r.text()}`);
+    const j = await r.json();
+    return j.content[0].text;
+  }
+
+  async function callOpenAI(prompt, key) {
+    const r = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${key}` },
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        max_tokens: 512,
+        messages: [{ role: "user", content: prompt }],
+      }),
+    });
+    if (!r.ok) throw new Error(`OpenAI API ${r.status}: ${await r.text()}`);
+    const j = await r.json();
+    return j.choices[0].message.content;
+  }
+
+  async function callGemini(prompt, key) {
+    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${encodeURIComponent(key)}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
+    });
+    if (!r.ok) throw new Error(`Gemini API ${r.status}: ${await r.text()}`);
+    const j = await r.json();
+    return j.candidates[0].content.parts[0].text;
+  }
+
+  async function runModel(model, prompt) {
+    if (model === "demo") return DEMO_RESPONSE;
+    const key = apiKey.value.trim();
+    if (!key) throw new Error("Paste an API key for the selected model, or switch to Demo.");
+    if (model === "claude") return callClaude(prompt, key);
+    if (model === "openai") return callOpenAI(prompt, key);
+    if (model === "gemini") return callGemini(prompt, key);
+    throw new Error("Unknown model.");
+  }
+
+  // ----- Generate -----
+  let lastExchange = null;
+  const promptEl = document.getElementById("prompt");
+  const responseEl = document.getElementById("llm-response");
+  const generateBtn = document.getElementById("generate-btn");
+
+  generateBtn.addEventListener("click", async () => {
+    const model = modelPick.value;
+    const prompt = promptEl.value.trim();
+    if (!prompt) { alert("Type a prompt first."); return; }
+    generateBtn.disabled = true;
+    generateBtn.textContent = "Generating...";
+    responseEl.classList.remove("empty");
+    responseEl.textContent = "Calling " + model + "...";
+    try {
+      const response = await runModel(model, prompt);
+      lastExchange = { model, prompt, response };
+      responseEl.textContent = response;
+      issueBtn.disabled = false;
+      issueBtn.classList.remove("ghost");
+      document.getElementById("receipt-out").classList.remove("shown");
+    } catch (e) {
+      responseEl.textContent = "Error: " + e.message;
+      issueBtn.disabled = true;
+    } finally {
+      generateBtn.disabled = false;
+      generateBtn.textContent = "Generate response";
+    }
+  });
+
+  // ----- Issue receipt -----
+  // Anchor instruction discriminator: sha256("global:issue_receipt")[..8] = b96c73821e83afb6.
+  const ISSUE_DISCRIMINATOR = new Uint8Array([0xb9, 0x6c, 0x73, 0x82, 0x1e, 0x83, 0xaf, 0xb6]);
+
+  async function buildIssueReceiptIx({ payloadHash, action, authorizingKey }) {
+    const data = new Uint8Array(8 + 32 + 32 + 32);
+    data.set(ISSUE_DISCRIMINATOR, 0);
+    data.set(action, 8);
+    data.set(authorizingKey.toBytes(), 40);
+    data.set(payloadHash, 72);
+    const [pda] = await PublicKey.findProgramAddress([new TextEncoder().encode("receipt"), payloadHash], PROGRAM_ID);
+    const ix = new TransactionInstruction({
+      programId: PROGRAM_ID,
+      keys: [
+        { pubkey: walletState.publicKey, isSigner: true, isWritable: true },
+        { pubkey: pda, isSigner: false, isWritable: true },
+        { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+      ],
+      data: data,
+    });
+    return { ix, pda };
+  }
+
+  issueBtn.addEventListener("click", async () => {
+    if (!walletState.publicKey) { alert("Connect Phantom first."); return; }
+    if (!lastExchange) { alert("Generate a response first."); return; }
+    issueBtn.disabled = true;
+    issueBtn.textContent = "Signing...";
+    try {
+      const timestamp = Math.floor(Date.now() / 1000);
+      const canonical = JSON.stringify({
+        model: lastExchange.model,
+        prompt: lastExchange.prompt,
+        response: lastExchange.response,
+        timestamp,
+      });
+      const payloadHash = await sha256(canonical);
+      const action = await sha256(`iris.llm.${lastExchange.model}`);
+      const { ix, pda } = await buildIssueReceiptIx({
+        payloadHash,
+        action,
+        authorizingKey: walletState.publicKey,
+      });
+      const tx = new Transaction().add(ix);
+      tx.feePayer = walletState.publicKey;
+      const { blockhash } = await conn.getLatestBlockhash("confirmed");
+      tx.recentBlockhash = blockhash;
+      const signed = await window.solana.signTransaction(tx);
+      const sig = await conn.sendRawTransaction(signed.serialize(), { skipPreflight: false });
+      await conn.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight: (await conn.getLatestBlockhash()).lastValidBlockHeight }, "confirmed");
+      const payloadHex = bytesToHex(payloadHash);
+      const explorer = (k, kind = "address") => `https://explorer.solana.com/${kind}/${k}?cluster=devnet`;
+      document.getElementById("receipt-out-list").innerHTML = `
+        <dt>Payload hash</dt><dd>${payloadHex}</dd>
+        <dt>Receipt PDA</dt><dd><a href="${explorer(pda.toBase58())}" target="_blank" rel="noopener">${pda.toBase58()}</a></dd>
+        <dt>Transaction</dt><dd><a href="${explorer(sig, "tx")}" target="_blank" rel="noopener">${sig.slice(0, 16)}...${sig.slice(-8)}</a></dd>
+        <dt>Verify it</dt><dd><a href="#" id="verify-this">Scroll to verifier &middot; pre-filled with this hash</a></dd>
+      `;
+      document.getElementById("receipt-out").classList.add("shown");
+      document.getElementById("verify-this").addEventListener("click", (e) => {
+        e.preventDefault();
+        document.getElementById("payload-hash").value = payloadHex;
+        document.getElementById("payload-hash").scrollIntoView({ behavior: "smooth", block: "center" });
+        document.getElementById("verify-form").dispatchEvent(new Event("submit", { cancelable: true }));
+      });
+    } catch (e) {
+      alert("Receipt failed: " + (e.message || e));
+    } finally {
+      issueBtn.disabled = false;
+      issueBtn.textContent = "Issue Iris receipt";
+    }
+  });
 
   function renderResult({ pda, receipt, payloadHashHex }) {
     const el = document.getElementById("result");
