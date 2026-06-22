@@ -3,7 +3,7 @@
 ## What this repo is
 
 The Solana half of Iris. Two Anchor programs (`iris-receipts`, `verifier-example`) and a TypeScript client (`@iris/client`)
-that the MCP server at `github.com/ligate-io/ligate-mcp` calls.
+that the companion MCP relayer service calls.
 
 The job of Iris: every time an AI agent takes an action via MCP, the relayer writes a verifiable receipt on-chain
 (`action`, `authorizing_key`, `timestamp`, `payload_hash`) keyed by `payload_hash`, and a separate worker batches roots to
@@ -58,4 +58,4 @@ npm --prefix clients/ts test   # offline tests, no validator
 
 ## Related repos
 
-- `github.com/ligate-io/ligate-mcp` — MCP server that calls `@iris/client`
+- Companion MCP relayer service (separate repo, calls `@iris/client`)

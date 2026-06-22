@@ -250,7 +250,7 @@ pub fn handler(ctx: Context&lt;ExecuteWithReceipt&gt;, payload_hash: [u8; 32]) -
 </main>
 
 <footer>
-  <span>Solana devnet &middot; <span id="program-id-footer"></span></span>
+  <span>Solana devnet &middot; program <a id="program-id-footer" href="#" target="_blank" rel="noopener" style="color: var(--accent)"></a></span>
   <span><a href="https://github.com/proofmancer/iris-solana">github.com/proofmancer/iris-solana</a></span>
 </footer>
 
@@ -264,7 +264,11 @@ pub fn handler(ctx: Context&lt;ExecuteWithReceipt&gt;, payload_hash: [u8; 32]) -
   const DISCRIMINATOR_LEN = 8;
   const conn = new Connection(RPC, "confirmed");
 
-  document.getElementById("program-id-footer").textContent = shortId(PROGRAM_ID.toBase58());
+  {
+    const el = document.getElementById("program-id-footer");
+    el.textContent = shortId(PROGRAM_ID.toBase58());
+    el.href = `https://explorer.solana.com/address/${PROGRAM_ID.toBase58()}?cluster=devnet`;
+  }
 
   function shortId(s) { return s.length > 12 ? s.slice(0, 6) + "..." + s.slice(-6) : s; }
 

@@ -6,7 +6,7 @@
 
 Every time an AI agent takes an action through MCP, Iris writes a signed on-chain receipt to a content-addressable PDA on Solana. Any program, off-chain verifier, or auditor can read the receipt back, atomically, without an indexer.
 
-This repo is the Solana half of Iris. The MCP server core lives at [github.com/ligate-io/ligate-mcp](https://github.com/ligate-io/ligate-mcp).
+This repo is the Solana half of Iris. The MCP server (the relayer that issues receipts) is a separate companion service.
 
 ## Try it in 30 seconds
 
@@ -31,7 +31,7 @@ The demo verifies a real on-chain receipt. The deployed program ID is `GvXMdAupD
 ```
    ┌────────────┐  agent action      ┌──────────────┐  issue_receipt    ┌─────────────────┐
    │  AI agent  │ ─────────────────► │  Iris MCP    │ ────────────────► │  iris-receipts  │
-   │  (ligate)  │  canonical body    │  (relayer)   │  payload_hash     │  PDA per hash   │
+   │            │  canonical body    │  (relayer)   │  payload_hash     │  PDA per hash   │
    └────────────┘                    └──────┬───────┘                   └────────┬────────┘
                                             │                                    │
                                             │  batch every N or T                │
@@ -133,7 +133,7 @@ pub fn handler(ctx: Context<ExecuteWithReceipt>, payload_hash: [u8; 32]) -> Resu
 
 **Phase 0.5 (this milestone).** Program deployed to devnet at `GvXMdAupDkGQxNXVEPMNowxFbyuBS5Bi4Kfq1zcDdopK`. Sample receipt issued. Live verifier page on GitHub Pages.
 
-**Phase 1 (next).** Wire the program into `ligate-mcp`. Expose `iris.issue_receipt(action, payload)` and `iris.verify_receipt(payload_hash)` as MCP tools. Register each user's `authorizing_key` server-side. Lock canonicalization with the MCP team.
+**Phase 1 (next).** Wire the program into an MCP server (the Iris relayer). Expose `iris.issue_receipt(action, payload)` and `iris.verify_receipt(payload_hash)` as MCP tools. Register each user's `authorizing_key` server-side. Lock canonicalization with the MCP-side team.
 
 **Phase 2.** Run the DA worker as a sidecar to the MCP relayer. On `RootCommitted`, back-fill `root_commit` on each receipt via a new `link_receipts_to_root` instruction. Inclusion-proof helper in `@iris/client`.
 
@@ -165,7 +165,7 @@ anchor deploy --provider.cluster devnet
 
 The deployed program ID is pinned in `Anchor.toml` and `programs/iris-receipts/src/lib.rs`. If you regenerate keypairs in `target/deploy/`, run `anchor keys sync` and rebuild before deploy.
 
-## Wiring into `ligate-mcp`
+## Wiring into an MCP server
 
 ```ts
 import { IrisRelayer } from "@iris/client";
