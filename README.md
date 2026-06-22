@@ -1,153 +1,169 @@
-# Iris — Solana side
+# Iris (Solana)
 
-Verifiable on-chain receipts for AI agent actions. This repo is the **Solana half** of Iris; the MCP server core lives at
-[github.com/ligate-io/ligate-mcp](https://github.com/ligate-io/ligate-mcp).
+**Verifiable on-chain receipts for AI agent actions.**
 
-## What this gives you
+> [Live demo](https://proofmancer.github.io/iris-solana/) &middot; [Deployed program (devnet)](https://explorer.solana.com/address/GvXMdAupDkGQxNXVEPMNowxFbyuBS5Bi4Kfq1zcDdopK?cluster=devnet) &middot; [Sample receipt](https://explorer.solana.com/address/8rbTEj7gEQvTfr8eBrKmKfabPkUos7dUM5K7SUnB99ow?cluster=devnet)
 
-1. **`iris-receipts`** — Anchor program. Stores relayer-signed agent-action receipts in a PDA keyed by `payload_hash`. Any
-   downstream Solana program can verify a receipt by deriving the same PDA and reading it (no CPI required).
-2. **`verifier-example`** — Anchor program. Tiny worked example of a downstream program that gates an action on a valid Iris
-   receipt for a specific agent + payload hash.
-3. **`@iris/client`** (TypeScript) — receipt builder, off-chain verifier, relayer helper, and Celestia DA worker.
-4. **Tests** — LiteSVM/Anchor integration tests for the program and offline unit tests for the client.
+Every time an AI agent takes an action through MCP, Iris writes a signed on-chain receipt to a content-addressable PDA on Solana. Any program, off-chain verifier, or auditor can read the receipt back, atomically, without an indexer.
 
-## Architecture
+This repo is the Solana half of Iris. The MCP server core lives at [github.com/ligate-io/ligate-mcp](https://github.com/ligate-io/ligate-mcp).
+
+## Try it in 30 seconds
+
+1. Open [the live demo](https://proofmancer.github.io/iris-solana/).
+2. Click "Try the demo receipt".
+3. The page derives the PDA from the payload hash, fetches the account from Solana devnet, and renders the verified receipt fields.
+
+The demo verifies a real on-chain receipt. The deployed program ID is `GvXMdAupDkGQxNXVEPMNowxFbyuBS5Bi4Kfq1zcDdopK`. The sample receipt PDA is `8rbTEj7gEQvTfr8eBrKmKfabPkUos7dUM5K7SUnB99ow`.
+
+## What ships
+
+| Component | Description |
+|---|---|
+| `programs/iris-receipts` | Anchor program. Three instructions: `issue_receipt`, `commit_root`, `verify_receipt`. Stores receipts in PDAs keyed by `payload_hash`. |
+| `programs/verifier-example` | Anchor program. A tiny downstream program that gates an action on a valid Iris receipt for a specific agent and payload. |
+| `clients/ts` (`@iris/client`) | TypeScript client. Canonical payload hashing, PDA derivation, relayer helper, pure client-side verifier, pluggable Celestia DA publisher. |
+| `docs/` | The live verifier page hosted on GitHub Pages. |
+| `tests/` | LiteSVM and Anchor integration tests for the program. Offline unit tests for the client. |
+
+## How it works
 
 ```
-   ┌────────────┐  agent action       ┌─────────────┐   issue_receipt    ┌────────────────┐
-   │  AI agent  │ ─────────────────► │  Iris MCP   │ ────────────────► │  iris-receipts │
-   │ (ligate)   │   canonical body   │  (relayer)  │   payload_hash      │   PDA per hash │
-   └────────────┘                     └──────┬──────┘                     └──────┬─────────┘
-                                             │                                    │
-                                             │ batch every N or T                 │
-                                             ▼                                    ▼
-                                     ┌────────────────┐  commit_root   ┌────────────────┐
-                                     │ Merkle batcher │ ─────────────► │ RootCommit PDA │
-                                     └──────┬─────────┘                └────────────────┘
-                                            │
-                                            ▼
-                                     ┌────────────────┐
-                                     │   Celestia     │  blob: leaves + root
-                                     │   (mocha-4)    │  pointer stored on Solana
-                                     └────────────────┘
+   ┌────────────┐  agent action      ┌──────────────┐  issue_receipt    ┌─────────────────┐
+   │  AI agent  │ ─────────────────► │  Iris MCP    │ ────────────────► │  iris-receipts  │
+   │  (ligate)  │  canonical body    │  (relayer)   │  payload_hash     │  PDA per hash   │
+   └────────────┘                    └──────┬───────┘                   └────────┬────────┘
+                                            │                                    │
+                                            │  batch every N or T                │
+                                            ▼                                    ▼
+                                    ┌────────────────┐  commit_root      ┌────────────────┐
+                                    │ Merkle batcher │ ────────────────► │ RootCommit PDA │
+                                    └──────┬─────────┘                   └────────────────┘
+                                           │
+                                           ▼
+                                    ┌────────────────┐
+                                    │   Celestia     │  blob: leaves + root
+                                    │   (mocha-4)    │  pointer stored on Solana
+                                    └────────────────┘
 
-   ┌──────────────────┐  derive PDA from payload_hash      ┌────────────────┐
-   │ downstream prog  │ ─────────────────────────────────► │  iris-receipts │
-   │  (verifier-ex)   │  read Receipt, check fields        │  PDA per hash  │
-   └──────────────────┘                                    └────────────────┘
+   ┌──────────────────┐  derive PDA from payload_hash    ┌─────────────────┐
+   │ downstream prog  │ ───────────────────────────────► │  iris-receipts  │
+   │  (verifier-ex)   │  read Receipt, check fields      │  PDA per hash   │
+   └──────────────────┘                                  └─────────────────┘
 ```
+
+PDA layout is **content-addressable**: `seeds = [b"receipt", payload_hash]`. The same canonical payload always lands at the same account. Duplicates fail loud.
 
 ## Data model
 
 `Receipt` (PDA `[b"receipt", payload_hash]`):
 
-| field             | type        | notes                                                       |
-|-------------------|-------------|-------------------------------------------------------------|
-| `version`         | `u8`        | starts at 1                                                 |
-| `action`          | `[u8; 32]`  | `sha256(action_name)` — bounded, no string heap             |
-| `authorizing_key` | `Pubkey`    | the agent's signing key (the key the user authorized)       |
-| `relayer`         | `Pubkey`    | who paid + submitted; must sign the tx                      |
-| `payload_hash`    | `[u8; 32]`  | `sha256(canonical_json(payload))`                           |
-| `timestamp`       | `i64`       | from Solana `Clock`                                         |
-| `slot`            | `u64`       | from Solana `Clock`                                         |
-| `root_commit`     | `Option<Pubkey>` | set when a Merkle root containing this leaf lands     |
-| `bump`            | `u8`        |                                                             |
+| field | type | notes |
+|---|---|---|
+| `version` | `u8` | starts at 1 |
+| `action` | `[u8; 32]` | `sha256(action_name)`, bounded, no string heap |
+| `authorizing_key` | `Pubkey` | the agent's signing key (the key the user authorized) |
+| `relayer` | `Pubkey` | who paid and submitted; must sign the tx |
+| `payload_hash` | `[u8; 32]` | `sha256(canonical_json(payload))` |
+| `timestamp` | `i64` | from Solana `Clock` |
+| `slot` | `u64` | from Solana `Clock` |
+| `root_commit` | `Option<Pubkey>` | set when a Merkle root containing this leaf lands |
+| `bump` | `u8` |  |
 
 `RootCommit` (PDA `[b"root", merkle_root]`):
 
-| field            | type        | notes                                                        |
-|------------------|-------------|--------------------------------------------------------------|
-| `merkle_root`    | `[u8; 32]`  | root of `sha256` over receipt `payload_hash`es               |
-| `da_pointer`     | `[u8; 64]`  | `height(8 LE) ‖ namespace(24) ‖ commitment(32)`              |
-| `receipt_count`  | `u32`       | leaves in the batch                                          |
-| `committed_at`   | `i64`       |                                                              |
-| `committed_slot` | `u64`       |                                                              |
-| `relayer`        | `Pubkey`    |                                                              |
-| `bump`           | `u8`        |                                                              |
+| field | type | notes |
+|---|---|---|
+| `merkle_root` | `[u8; 32]` | root of `sha256` over receipt `payload_hash`es |
+| `da_pointer` | `[u8; 64]` | `height(8 LE) ‖ namespace(24) ‖ commitment(32)` |
+| `receipt_count` | `u32` | leaves in the batch |
+| `committed_at` | `i64` |  |
+| `committed_slot` | `u64` |  |
+| `relayer` | `Pubkey` |  |
+| `bump` | `u8` |  |
 
 ## Instructions
 
-| ix                | who signs | effect                                                                                  |
-|-------------------|-----------|------------------------------------------------------------------------------------------|
-| `issue_receipt`   | relayer   | creates the `Receipt` PDA. Fails if one already exists for the payload (idempotent).    |
-| `commit_root`    | relayer   | creates a `RootCommit` PDA pointing at a Celestia blob.                                  |
-| `verify_receipt`  | (none)    | view ix — returns `AttestationView` and emits `ReceiptVerified`. Callable via CPI.       |
+| Instruction | Signer | Effect |
+|---|---|---|
+| `issue_receipt` | relayer | Creates the `Receipt` PDA. Fails if one already exists for the payload (idempotent by design). |
+| `commit_root` | relayer | Creates a `RootCommit` PDA pointing at a Celestia blob. |
+| `verify_receipt` | none | View instruction. Returns `AttestationView` and emits `ReceiptVerified`. Callable via CPI. |
 
-Two verification patterns are supported:
+### Two verification patterns
 
-- **Read-only (cheap path)** — derive PDA from `payload_hash`, read & check fields. See `verifier-example/src/lib.rs`.
-- **CPI / event path** — call `verify_receipt`; the program emits `ReceiptVerified` that callers can pin to.
+**Cheap path (pure client-side).** Derive the PDA from the payload hash, read the account, decode the fields. No CPI, no extra signature. This is what the [live verifier page](https://proofmancer.github.io/iris-solana/) does in the browser.
+
+**CPI path.** Downstream Solana programs invoke `verify_receipt` and pin to the `ReceiptVerified` event. Useful when you want the verification step itself recorded on-chain.
+
+Example downstream program (the actual `verifier-example`):
+
+```rust
+use anchor_lang::prelude::*;
+use iris_receipts::state::{Receipt, RECEIPT_SEED};
+
+#[derive(Accounts)]
+#[instruction(payload_hash: [u8; 32])]
+pub struct ExecuteWithReceipt<'info> {
+    #[account(
+        seeds = [RECEIPT_SEED, payload_hash.as_ref()],
+        seeds::program = iris_receipts::ID,
+        bump,
+    )]
+    pub receipt: Account<'info, Receipt>,
+}
+
+pub fn handler(ctx: Context<ExecuteWithReceipt>, payload_hash: [u8; 32]) -> Result<()> {
+    let r = &ctx.accounts.receipt;
+    require!(r.payload_hash == payload_hash, ErrorCode::Mismatch);
+    // r.action, r.authorizing_key, r.timestamp are all on-chain truth.
+    Ok(())
+}
+```
 
 ## Trust model
 
-- The agent's `authorizing_key` is whatever the MCP server registered for that user. The on-chain program does not verify the
-  agent's signature directly — the **relayer** vouches by signing the transaction and the `authorizing_key` is recorded in
-  the receipt. Downstream programs trust the receipt iff they trust the relayer.
-- For trust-minimized variants, the MCP server can sign the canonical payload with the agent key, store the signature in the
-  payload, and any verifier can re-check it off-chain. Keep the on-chain footprint to `payload_hash` only.
-- Batched roots on Celestia exist so that a permanent, public record of every receipt survives even if individual Solana
-  accounts are garbage collected by future cleanup work.
+- The agent's `authorizing_key` is whatever the MCP server registered for that user. The on-chain program does not verify the agent's signature directly. The **relayer** vouches by signing the transaction, and the `authorizing_key` is recorded in the receipt. Downstream programs trust the receipt iff they trust the relayer.
+- For trust-minimized variants the MCP server can sign the canonical payload with the agent key, store the signature in the payload, and any verifier can re-check it off-chain. The on-chain footprint stays at `payload_hash` only.
+- Batched roots on Celestia exist so a permanent, public record of every receipt survives even if individual Solana accounts are garbage collected by future state cleanup work.
 
-## Project plan
+## Roadmap
 
-### Phase 0 — scaffold (this commit)
-- [x] Anchor program with `issue_receipt`, `commit_root`, `verify_receipt`
-- [x] `verifier-example` showing how a downstream Anchor program reads receipts
-- [x] TS client with payload hashing, PDA derivation, relayer wrapper, off-chain verifier
-- [x] Celestia DA worker scaffold (batch + publish blob, encode `da_pointer`)
-- [x] Anchor & TS tests
-- [x] `.env.example`, setup script
+**Phase 0 (scaffold).** Anchor program with all three instructions. `verifier-example`. TypeScript client with payload hashing, PDA derivation, relayer wrapper, off-chain verifier. Celestia DA worker scaffold. Anchor and TS tests. `.env.example` and setup script.
 
-### Phase 1 — wire to ligate-mcp
-- [ ] Add `iris.issue_receipt(action, payload)` as an MCP tool inside `ligate-mcp` that uses `@iris/client`'s `IrisRelayer`
-- [ ] Add `iris.verify_receipt(payloadHash)` as an MCP tool that returns the `AttestationView`
-- [ ] MCP server: register the agent's `authorizing_key` per user, expose `iris.get_receipt_url(payloadHash)` returning an explorer URL
-- [ ] Decide payload canonicalization with ligate-mcp team — currently `canonicalize()` in `clients/ts/src/receipt.ts`
+**Phase 0.5 (this milestone).** Program deployed to devnet at `GvXMdAupDkGQxNXVEPMNowxFbyuBS5Bi4Kfq1zcDdopK`. Sample receipt issued. Live verifier page on GitHub Pages.
 
-### Phase 2 — DA + back-fill
-- [ ] Run the DA worker as a sidecar to the MCP relayer
-- [ ] On `RootCommitted` event, back-fill `root_commit` field on each `Receipt` (new ix `link_receipts_to_root`)
-- [ ] Inclusion-proof helper in `@iris/client`: prove a `payload_hash` is in a given root using the Celestia blob
+**Phase 1 (next).** Wire the program into `ligate-mcp`. Expose `iris.issue_receipt(action, payload)` and `iris.verify_receipt(payload_hash)` as MCP tools. Register each user's `authorizing_key` server-side. Lock canonicalization with the MCP team.
 
-### Phase 3 — harden
-- [ ] Relayer allowlist + per-relayer rate limits on-chain
-- [ ] Replace ad-hoc Merkle with `@solana/spl-account-compression` concurrent Merkle tree (so the on-chain proof itself is verifiable)
-- [ ] Optional Ed25519 program verification of the agent signature inside `issue_receipt`
-- [ ] Devnet → mainnet plan, multisig program upgrade authority (Squads)
-- [ ] Security review (see `/code-review ultra` and the `cso` skill)
+**Phase 2.** Run the DA worker as a sidecar to the MCP relayer. On `RootCommitted`, back-fill `root_commit` on each receipt via a new `link_receipts_to_root` instruction. Inclusion-proof helper in `@iris/client`.
 
-## Setup
+**Phase 3 (harden).** Relayer allowlist and per-relayer rate limits on-chain. Replace ad-hoc Merkle with `@solana/spl-account-compression` concurrent Merkle tree. Optional Ed25519 program verification of the agent signature inside `issue_receipt`. Mainnet plan, Squads multisig program upgrade authority. Security review.
+
+## Build and test (local)
+
+The deployed binary on devnet was built via [Solana Playground](https://beta.solpg.io/) because of a transient toolchain gap in the local Solana 4.x platform-tools at the time of this commit. Local build instructions below remain for when the upstream toolchain stabilizes.
 
 ```bash
-cd ~/Desktop/iris-solana
-./scripts/setup.sh           # installs avm + anchor 0.30.1, builds, deploys to devnet
-cp .env.example .env         # fill in HELIUS_RPC_URL, CELESTIA_AUTH_TOKEN
-```
-
-Anchor isn't currently installed on this machine — `scripts/setup.sh` will install it via `avm`. The first install takes a
-while (compiling anchor-cli from source). If you'd rather install it yourself:
-
-```bash
+# install anchor (one-time)
 cargo install --git https://github.com/coral-xyz/anchor avm --force
 avm install 0.30.1 && avm use 0.30.1
-```
 
-## Build & test
-
-```bash
-anchor build                # builds both programs
-anchor test                 # spins up a local validator and runs tests/iris-receipts.ts
-npm --prefix clients/ts test   # offline unit tests for the TS client (no validator needed)
+# build and test
+anchor build
+anchor test
+npm --prefix clients/ts test
 ```
 
 ## Deploy to devnet
 
+The shipped artifact for this milestone was deployed via Solana Playground. To redeploy from a local clone once the toolchain works:
+
 ```bash
+solana config set --url devnet
 anchor deploy --provider.cluster devnet
-# replace IRIS_PROGRAM_ID in .env with the printed program id and rebuild
-# IDLs land in target/idl/ — the MCP server can import them directly.
 ```
+
+The deployed program ID is pinned in `Anchor.toml` and `programs/iris-receipts/src/lib.rs`. If you regenerate keypairs in `target/deploy/`, run `anchor keys sync` and rebuild before deploy.
 
 ## Wiring into `ligate-mcp`
 
@@ -174,6 +190,10 @@ return { signature, receiptPda: receiptPda.toBase58(), payloadHash: payloadHash.
 
 ## Notes
 
-- The `issue_receipt` discriminator in `clients/ts/src/relayer.ts` is precomputed (`b96c73821e83afb6`); regenerate with `sha256("global:issue_receipt")[..8]` if the instruction is renamed.
-- Two verification patterns ship: pure client-side (`clients/ts/src/verify.ts` derives the PDA, reads the account, decodes the bytes) and on-chain CPI (`verify_receipt` ix returns `AttestationView` and emits `ReceiptVerified`). Pick whichever fits your caller.
-- `BlobPublisher` is pluggable. The Solana-native ledger publisher is the default; the Celestia mocha-4 publisher (`clients/ts/src/da/celestia.ts`) is optional and exposes the namespace via a typed `get namespace()` accessor.
+- The `issue_receipt` discriminator in `clients/ts/src/relayer.ts` is precomputed (`b96c73821e83afb6`). Regenerate with `sha256("global:issue_receipt")[..8]` if the instruction is renamed.
+- `BlobPublisher` is pluggable. The Solana-native ledger publisher is the default. The Celestia mocha-4 publisher in `clients/ts/src/da/celestia.ts` is optional and exposes its namespace via a typed `get namespace()` accessor.
+- The verify page in `docs/` is pure client-side. It loads `@solana/web3.js` from a CDN, derives the PDA in the browser, and queries Solana devnet directly. No backend required.
+
+## License
+
+MIT or Apache-2.0, dual-licensed. See `LICENSE-MIT` and `LICENSE-APACHE`.
